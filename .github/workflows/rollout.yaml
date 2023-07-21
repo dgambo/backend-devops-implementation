@@ -1,0 +1,52 @@
+name: Rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service
+        type: choice
+        options:
+          - api
+        required: true
+      environment:
+        description: Environment
+        type: choice
+        options:
+          - dev
+          - stg
+          - production
+        required: true
+
+env:
+  AWS_REGION:     us-east-1
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
+jobs:
+  rollout:
+    name: "[${{ github.event.inputs.environment }}] AWS CDK rollout"
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    permissions:
+      id-token: write # This is required for requesting the JWT
+      contents: read  # This is required for actions/checkout
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region:     ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/CICD
+          role-session-name: "GitHubWorkflowRollout"
+      - name: Install dependencies
+        run: |
+          echo     $GITHUB_WORKSPACE/.local/bin >> $GITHUB_PATH
+          mkdir -p $GITHUB_WORKSPACE/.local/bin
+          wget  -O $GITHUB_WORKSPACE/.local/bin/yq https://github.com/mikefarah/yq/releases/download/4.30.3/yq_linux_amd64 && \
+          chmod +x $GITHUB_WORKSPACE/.local/bin/yq
+      - name: Run AWS CDK rollout
+        run: |
+          env={{ github.event.inputs.environment }}
+          tag=$(yq '.service.${{ github.event.inputs.service}}.image.tag' ./cmd/aws/.app-config.${env}.yml)
+
+          make aws-rollout-${{ github.event.inputs.service }} AWS_ENVIRONMENT=${env} TAG=${tag}

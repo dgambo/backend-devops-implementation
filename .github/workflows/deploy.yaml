@@ -1,0 +1,71 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment
+        type: choice
+        options:
+          - dev
+          - stg
+          - production
+        required: true
+
+env:
+  AWS_REGION:     us-east-1
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
+jobs:
+  deploy:
+    name: "[${{ github.event.inputs.environment }}] AWS CDK deploy"
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    permissions:
+      id-token: write # This is required for requesting the JWT
+      contents: read  # This is required for actions/checkout
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region:     ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/CICD
+          role-session-name: "GitHubWorkflowDeploy"
+      - name: Setup runtime
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Cache NPM
+        id: cache-node-modules
+        uses: actions/cache@v3
+        env:
+          cache-name: node_modules
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ~/.npm
+          key: npm-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            npm-build-${{ env.cache-name }}-
+            npm-build-
+      - name: Install dependencies
+        run: |
+          npm ci
+      - name: Build the CDK app
+        run: |
+          npm run build
+      - name: Cache AWS CDK Context
+        id: cache-cdk-context
+        uses: actions/cache@v3
+        env:
+          cache-name: cdk.context.json
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ./cdk.context.json
+          key: cdk-context-${{ env.cache-name }}-${{ hashFiles('cdk.context.json') }}
+          restore-keys: |
+            cdk-context-${{ env.cache-name }}-
+            cdk-context-
+      - name: Run AWS CDK deploy
+        run: |
+          make aws-cdk-deploy ARGS="--logs -v --ci never --all" AWS_ENVIRONMENT=${{ github.event.inputs.environment }}

@@ -1,0 +1,41 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# IDEs configuration
+.idea/
+.vscode/
+
+# Dependencies
+node_modules/
+
+# CDK asset staging directory
+cdk.out/
+.cdk.staging/
+
+# Testing
+!jest.config.js
+coverage/
+
+# Build
+*.js
+*.d.ts
+
+# ESLint
+!.eslintrc.js
+
+# Prettier
+!.prettierrc.js
+
+# Logs
+npm-debug.log*
+
+# Local environment variables
+.env*
+!.env.template
+
+# Temp
+temp/*
+tmp/*
+
+# Other
+*.old
+.DS_Store
+scripts/certs
